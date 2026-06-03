@@ -2,74 +2,70 @@ import os
 import glob
 import pandas as pd
 
-def explore_and_validate_live_data():
+def audit_all_csv_datasets():
     raw_dir = "data/raw"
     
-    # 1. Find all live NAV files you downloaded from the API
-    csv_files = glob.glob(os.path.join(raw_dir, "live_nav_*.csv"))
+    # Target every CSV file present in the raw folder
+    csv_files = glob.glob(os.path.join(raw_dir, "*.csv"))
     
     if not csv_files:
-        print(" No live NAV CSV files found in data/raw/. Please run live_nav_fetch.py first!")
+        print(" No CSV datasets found in data/raw/. Please add your 10 files first!")
         return
 
-    print(f" Found {len(csv_files)} live CSV datasets. Loading and combining...")
+    print(f" Found {len(csv_files)} total CSV files inside '{raw_dir}'. Starting Data Profiling & Audit...\n")
     
-    # Combine all files into a temporary master dataframe for exploration
-    all_data = []
-    for file in csv_files:
-        try:
-            df = pd.read_csv(file)
-            all_data.append(df)
-        except Exception as e:
-            print(f"Error reading {file}: {e}")
-            
-    combined_df = pd.concat(all_data, ignore_index=True)
-    
-    # ----------------------------------------------------
-    # TASK 1: EXPLORE LIVE FUND MASTER DATA
-    # ----------------------------------------------------
-    print("\n=========================================")
-    print(" FUND MASTER EXPLORATION SUMMARY")
-    print("=========================================")
-    print(f"• Total Records Extracted:     {len(combined_df)}")
-    print(f"• Unique Funds Tracked:        {combined_df['scheme_name'].nunique()}")
-    print(f"• Unique AMFI Scheme Codes:    {combined_df['scheme_code'].nunique()}")
-    print(f"• Unique Fund Houses Present:  {combined_df['fund_house'].nunique()}")
-    
-    print("\nList of Tracked Fund Houses:")
-    for house in combined_df['fund_house'].unique():
-        print(f"  - {house}")
+    # Loop through each file to inspect properties
+    for idx, file_path in enumerate(sorted(csv_files), 1):
+        file_name = os.path.basename(file_path)
+        print("=" * 60)
+        print(f" DATASET {idx}: {file_name}")
+        print("=" * 60)
         
-    # ----------------------------------------------------
-    # TASK 2: UNDERSTAND AMFI SCHEME CODE STRUCTURE
-    # ----------------------------------------------------
-    print("\n=========================================")
-    print("AMFI SCHEME CODE STRUCTURE STUDY")
-    print("=========================================")
-    print("AMFI (Association of Mutual Funds in India) issues a unique 6-digit numeric identifier")
-    print("for every mutual fund scheme variant to track its history uniformly.")
-    print(f"\n• Verified Data Type for Codes: {combined_df['scheme_code'].dtype}")
-    print(f"• Unique 6-Digit Codes Active:  {combined_df['scheme_code'].unique().tolist()}")
-    
-    # ----------------------------------------------------
-    # TASK 3: VALIDATE AMFI CODES & DATA QUALITY REPORT
-    # ----------------------------------------------------
-    print("\n=========================================")
-    print("AMFI INTEGRITY VALIDATION")
-    print("=========================================")
-    
-    print("\n--- Data Quality Summary Report ---")
-    null_nav = combined_df['nav'].isnull().sum()
-    null_date = combined_df['date'].isnull().sum()
-    
-    print(f"• Missing/Null NAV Values:  {null_nav}")
-    print(f"• Missing/Null Date Values: {null_date}")
-    
-    if null_nav == 0 and null_date == 0:
-        print("\n INTEGRITY CHECK PASSED: 100% Referential Identity Match.")
-        print("Every single downloaded AMFI scheme code contains complete historical data rows with zero missing values.")
-    else:
-        print("\nALERT: Data quality anomalies detected with missing values.")
+        try:
+            # Load file
+            df = pd.read_csv(file_path)
+            
+            # 1. Print Shape
+            print(f" Dimensionality (.shape): {df.shape[0]} rows, {df.shape[1]} columns")
+            print("-" * 40)
+            
+            # 2. Print Data Types
+            print(" Column Names & Data Types (.dtypes):")
+            print(df.dtypes)
+            print("-" * 40)
+            
+            # 3. Print Head
+            print(" First 3 Preview Rows (.head()):")
+            print(df.head(3))
+            print("-" * 40)
+            
+            # 4. Anomaly Scanner
+            print(" Automated Data Quality & Anomaly Notes:")
+            has_anomalies = False
+            
+            # Check for missing values
+            missing_counts = df.isnull().sum()
+            total_missing = missing_counts.sum()
+            if total_missing > 0:
+                has_anomalies = True
+                print(f"   MISSING DATA: Found {total_missing} null fields.")
+                for col, count in missing_counts.items():
+                    if count > 0:
+                        print(f"     - Column '{col}': {count} missing rows")
+            
+            # Check for exact duplicate rows
+            duplicate_count = df.duplicated().sum()
+            if duplicate_count > 0:
+                has_anomalies = True
+                print(f"  DUPLICATES: Found {duplicate_count} exact duplicate rows.")
+                
+            if not has_anomalies:
+                print("  CLEAN: Structure looks solid with zero null cells or duplicates.")
+                
+        except Exception as e:
+            print(f" Failed to complete audit for {file_name} due to error: {str(e)}")
+            
+        print("\n" + "•" * 60 + "\n")
 
 if __name__ == "__main__":
-    explore_and_validate_live_data()
+    audit_all_csv_datasets()
